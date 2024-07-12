@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "515540863191",
+    "project_id": "mobo-game-b66c7",
+    "storage_bucket": "mobo-game-b66c7.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:515540863191:android:43873a3fa3e1b964ee4892",
+        "android_client_info": {
+          "package_name": "com.example.mobo_game"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGvZ36ApWkJhbRHyNvcncYSv91JYK1tFY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

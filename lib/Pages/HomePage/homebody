@@ -1,0 +1,261 @@
+import 'dart:typed_data';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class HomeContent extends StatefulWidget {
+  @override
+  _HomeContentState createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  String? userId;
+  List<Widget> addedBoxes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchUserId();
+  }
+
+  Future<void> fetchUserId() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      setState(() {
+        userId = user.uid;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Color.fromARGB(255, 239, 239, 239),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Welcome to our app!',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    showAddForm();
+                  },
+                  child: Text('Add'),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Color.fromARGB(255, 244, 243, 243),
+                border: Border.all(color: Color.fromARGB(255, 131, 130, 130)),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color.fromARGB(255, 97, 97, 97).withOpacity(0.5),
+                    spreadRadius: 10,
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Hello, this is your homepage content.'),
+                  SizedBox(height: 10),
+                  Wrap(
+                    spacing: 20.0,
+                    runSpacing: 20.0,
+                    children: addedBoxes.map((box) {
+                      return GestureDetector(
+                        onTap: () {
+                          navigateToSecondPage();
+                        },
+                        child: box,
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void showAddForm() async {
+    File? imageFile;
+    String? title;
+    String? selectedType;
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text('Add Item'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final picker = ImagePicker();
+                      final pickedFile =
+                      await picker.pickImage(source: ImageSource.gallery);
+                      setState(() {
+                        if (pickedFile != null) {
+                          imageFile = File(pickedFile.path);
+                        }
+                      });
+                    },
+                    child: imageFile != null
+                        ? Image.file(
+                      imageFile!,
+                      height: 100,
+                      width: 100,
+                      fit: BoxFit.cover,
+                    )
+                        : Container(
+                      height: 100,
+                      width: 100,
+                      color: Colors.grey,
+                      child: Icon(Icons.add),
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  TextFormField(
+                    decoration: InputDecoration(labelText: 'Title'),
+                    onChanged: (value) {
+                      title = value;
+                    },
+                  ),
+                  SizedBox(height: 10),
+                  Text('Select Type:'),
+                  Row(
+                    children: [
+                      Radio<String>(
+                        value: 'normal',
+                        groupValue: selectedType,
+                        onChanged: (value) {
+                          setState(() {
+                            selectedType = value;
+                          });
+                        },
+                      ),
+                      Text('normal'),
+                      Radio<String>(
+                        value: 'Unicode',
+                        groupValue: selectedType,
+                        onChanged: (value) {
+                          setState(() {
+                            selectedType = value;
+                          });
+                        },
+                      ),
+                      Text('Unicode'),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      if (imageFile != null &&
+                          title != null &&
+                          selectedType != null &&
+                          userId != null) {
+                        String collectionPath =
+                        'homeitems/$userId/$title'.replaceAll(' ', '_').toLowerCase();
+
+                        String? imageUrl =
+                        await uploadImageToStorage(imageFile!, collectionPath);
+
+                        await FirebaseFirestore.instance
+                            .collection(collectionPath)
+                            .add({
+                          'title': title,
+                          'type': selectedType,
+                          'imageUrl': imageUrl,
+                        });
+
+                        setState(() {
+                          addedBoxes.add(
+                            Container(
+                              width: 160,
+                              height: 160,
+                              decoration: BoxDecoration(
+                                image: DecorationImage(
+                                  image: FileImage(imageFile!),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                          );
+                        });
+
+                        Navigator.of(context).pop();
+                      }
+                    } catch (e) {
+                      print('Error adding item to Firestore: $e');
+                    }
+                  },
+                  child: Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<String?> uploadImageToStorage(
+      File? imageFile, String collectionPath) async {
+    if (imageFile != null) {
+      try {
+        String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+        Reference storageReference = FirebaseStorage.instance
+            .ref()
+            .child('$collectionPath/$fileName');
+        List<int> data = await imageFile.readAsBytes();
+        await storageReference.putData(Uint8List.fromList(data));
+        String imageUrl = await storageReference.getDownloadURL();
+        return imageUrl;
+      } catch (e) {
+        print('Error uploading image to Storage: $e');
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  void navigateToSecondPage() {
+    // Implement navigation logic to the second page
+  }
+}

@@ -1,0 +1,300 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mobo_game/Pages/HomePage/order/AdminOrderDetails.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class AdminOrdersPage extends StatefulWidget {
+  @override
+  _AdminOrdersPageState createState() => _AdminOrdersPageState();
+}
+
+class _AdminOrdersPageState extends State<AdminOrdersPage> {
+  late TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Admin Shops Order'),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by shop name',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                // Implement search logic here
+                // You can use value from the search field (_searchController.text) for filtering
+              },
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('AdminsBuy')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                } else {
+                  final adminBuyDocs = snapshot.data!.docs;
+                  return SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        for (final adminBuyDoc in adminBuyDocs)
+                          Builder(
+                            builder: (BuildContext context) {
+                              final adminBuyData =
+                                  adminBuyDoc.data() as Map<String, dynamic>;
+                              final usersId = adminBuyData['UsersId'];
+                              if (usersId is String) {
+                                // Fetch user details from Firestore
+                                return FutureBuilder<DocumentSnapshot>(
+                                  future: FirebaseFirestore.instance
+                                      .collection('userProfiles')
+                                      .doc(usersId)
+                                      .get(),
+                                  builder: (context, userSnapshot) {
+                                    if (userSnapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return CircularProgressIndicator();
+                                    } else if (userSnapshot.hasError) {
+                                      return Text(
+                                          'Error: ${userSnapshot.error}');
+                                    } else if (!userSnapshot.hasData ||
+                                        userSnapshot.data == null) {
+                                      // Handle case where user document doesn't exist
+                                      return Card(
+                                        child: ListTile(
+                                          title: Text('User not found'),
+                                        ),
+                                      );
+                                    } else {
+                                      final userData = userSnapshot.data!.data()
+                                          as Map<String, dynamic>;
+                                      final userName =
+                                          userData['name'] ?? 'N/A';
+                                      final shopName =
+                                          userData['shopname'] ?? 'N/A';
+                                      final secondphone =
+                                          userData['secondphone'] ?? 'N/A';
+                                      final userAddress =
+                                          userData['address'] ?? 'N/A';
+                                      final phoneNumber =
+                                          userData['phoneNumber'] ?? 'N/A';
+                                      return GestureDetector(
+                                        onLongPress: () {
+                                          showOptionsDialog(context,
+                                              phoneNumber, secondphone);
+                                        },
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  AdminOrderDetailWidget(
+                                                      userId: usersId),
+                                            ),
+                                          );
+                                        },
+                                        child: Card(
+                                          child: ListTile(
+                                            title: Text('Shop Name: $shopName'),
+                                            subtitle: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text('Name: $userName'),
+                                                Text('Address: $userAddress'),
+                                                Text(
+                                                    'Phone Number: $phoneNumber'),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                );
+                              } else {
+                                print(
+                                    'Invalid or missing UsersId field in document ${adminBuyDoc.id}');
+                                return SizedBox.shrink();
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void showOptionsDialog(
+      BuildContext context, String phoneNumber, String secondphone) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Options'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text('Call This User'),
+                onTap: () {
+                  callFunction(context, phoneNumber, secondphone);
+                },
+              ),
+              ListTile(
+                title: Text('Cancel This Order'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void callFunction(
+      BuildContext context, String phoneNumber, String secondphone) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Call Options'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text('Verified Number'),
+                onTap: () {
+                  if (phoneNumber != null) {
+                    try {
+                      launch("tel:$phoneNumber");
+                    } catch (e) {
+                      print('Error launching phone call: $e');
+                    }
+                  } else {
+                    print('User phone number not found');
+                  }
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('Secondary Number'),
+                onTap: () {
+                  if (secondphone != null) {
+                    try {
+                      launch("tel:$secondphone");
+                    } catch (e) {
+                      print('Error launching phone call: $e');
+                    }
+                  } else {
+                    print('User phone number not found');
+                  }
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('Cancel This Order'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class AdminSearchDelegate extends SearchDelegate<String> {
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+        },
+      ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: Icon(Icons.arrow_back),
+      onPressed: () {
+        close(context, '');
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('AdminsBuy')
+          .where('shopname', isEqualTo: query)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        } else {
+          final items = snapshot.data!.docs;
+          // Return the list of search results
+          return ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index].data() as Map<String, dynamic>;
+              return ListTile(
+                title: Text(item['shopname'] ?? 'N/A'),
+                subtitle: Text(item['name'] ?? 'N/A'),
+                // You can customize the UI as needed
+              );
+            },
+          );
+        }
+      },
+    );
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    // Return an empty container as we're not implementing suggestions based on shop name
+    return Container();
+  }
+}
